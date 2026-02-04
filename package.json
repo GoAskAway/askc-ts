@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "codegen": "npm run codegen:proto",
-    "codegen:proto": "node scripts/generate-generated.cjs --config Actr.toml --proto-root askaway-proto --out src/generated --dist-import @actor-rtc/actr",
+    "codegen:proto": "node scripts/generate-generated.cjs --config Actr.toml --proto-root protos/remote --out src/generated --dist-import @actor-rtc/actr",
     "dev": "tsx src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"

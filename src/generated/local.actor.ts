@@ -17,11 +17,11 @@ const RPC_PAYLOAD_TYPE: PayloadType = 0;
 const ROUTES = [
   {
     routeKey: PROMPT_ROUTE_KEY,
-    targetType: {"manufacturer":"askaway","name":"AskService"},
+    targetType: {"manufacturer":"askaway1","name":"AskService"},
   },
   {
     routeKey: ATTACH_ROUTE_KEY,
-    targetType: {"manufacturer":"askaway","name":"AskService"},
+    targetType: {"manufacturer":"askaway1","name":"AskService"},
   },
 ];
 
@@ -30,18 +30,6 @@ export async function dispatch(
   ctx: ContextBridge,
   envelope: RpcEnvelopeBridge
 ): Promise<Buffer> {
-  if (envelope.routeKey === PROMPT_ROUTE_KEY) {
-    const request = Ask_UsrPromptRequest.decode(envelope.payload);
-    const response = await handler.prompt(request, ctx);
-    return Ask_AssistantReply.encode(response);
-  }
-
-  if (envelope.routeKey === ATTACH_ROUTE_KEY) {
-    const request = Ask_AttachRequest.decode(envelope.payload);
-    const response = await handler.attach(request, ctx);
-    return Ask_AttachResponse.encode(response);
-  }
-
   const match = ROUTES.find((route) => route.routeKey === envelope.routeKey);
   if (!match) {
     throw new Error(`Unknown route: ${envelope.routeKey}`);

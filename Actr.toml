@@ -6,11 +6,11 @@ name = "askc-ts"
 description = "Ask client"
 
 [package.actr_type]
-manufacturer = "askaway"
+manufacturer = "askaway1"
 name = "Client"
 
 [dependencies]
-ask-service = { actr_type = "askaway+AskService" }
+ask-service = { actr_type = "askaway1+AskService" }
 
 [system.signaling]
 url = "wss://actrix1.develenv.com/signaling/ws"
@@ -30,4 +30,4 @@ turn_urls = ["turn:actrix1.develenv.com:3478"]
 
 [[acl.rules]]
 permission = "allow"
-types = ["askaway+AskService"]
+types = ["askaway1+AskService"]

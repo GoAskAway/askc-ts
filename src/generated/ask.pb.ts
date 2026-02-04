@@ -1,6 +1,6 @@
 // DO NOT EDIT.
 // @ts-nocheck
-// Generated from askaway-proto/ask.proto
+// Generated from protos/remote/ask-service/ask.proto
 
 export enum Ask_AttachmentType {
   ATTACHMENT_TYPE_UNKNOWN = 0,

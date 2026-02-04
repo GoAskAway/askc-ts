@@ -25,8 +25,12 @@ async function main(): Promise<void> {
 
     if (reply.streamId) {
       console.log(`Waiting for DataStream (streamId: ${reply.streamId})...`);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Wait longer for the stream chunks to arrive
+      await new Promise((resolve) => setTimeout(resolve, 10000));
     }
+  } catch (error) {
+    console.error('RPC call failed:', error);
+    throw error;
   } finally {
     await client.close();
   }

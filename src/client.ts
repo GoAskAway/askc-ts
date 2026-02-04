@@ -11,13 +11,12 @@ import type {
 } from '@actor-rtc/actr';
 
 import {
-  ATTACH_ROUTE_KEY,
-  PROMPT_ROUTE_KEY,
   decodeAssistantReply,
   decodeAttachResponse,
   encodeAttachRequest,
   encodeUsrPromptRequest,
 } from './generated/ask.client.js';
+import { dispatch as localDispatch } from './generated/local.actor.js';
 import {
   Ask_AssistantReply,
   Ask_AttachRequest,
@@ -27,17 +26,6 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_PAYLOAD_TYPE: PayloadType = 0;
-
-const ROUTES = [
-  {
-    routeKey: PROMPT_ROUTE_KEY,
-    targetType: { manufacturer: 'askaway', name: 'AskService' },
-  },
-  {
-    routeKey: ATTACH_ROUTE_KEY,
-    targetType: { manufacturer: 'askaway', name: 'AskService' },
-  },
-] as const;
 
 class AskClientWorkload implements Workload {
   private ctx?: ContextBridge;
@@ -55,19 +43,7 @@ class AskClientWorkload implements Workload {
   }
 
   async dispatch(ctx: ContextBridge, envelope: RpcEnvelopeBridge): Promise<Buffer> {
-    const match = ROUTES.find((route) => route.routeKey === envelope.routeKey);
-    if (!match) {
-      throw new Error(`Unknown route: ${envelope.routeKey}`);
-    }
-
-    const targetId = await ctx.discover(match.targetType);
-    return await ctx.callRaw(
-      targetId,
-      envelope.routeKey,
-      DEFAULT_PAYLOAD_TYPE,
-      envelope.payload,
-      DEFAULT_TIMEOUT_MS
-    );
+    return await localDispatch(this as any, ctx, envelope);
   }
 }
 
@@ -107,9 +83,13 @@ export class AskServiceClient {
     request: Ask_UsrPromptRequest,
     timeoutMs: number = DEFAULT_TIMEOUT_MS
   ): Promise<Ask_AssistantReply> {
+    const routeKey = (Ask_UsrPromptRequest as any).routeKey;
+    if (!routeKey) {
+      throw new Error('Ask_UsrPromptRequest has no routeKey associated');
+    }
     const payload = encodeUsrPromptRequest(request);
     const responsePayload = await this.actorRef.call(
-      PROMPT_ROUTE_KEY,
+      routeKey,
       DEFAULT_PAYLOAD_TYPE,
       payload,
       timeoutMs
@@ -148,9 +128,13 @@ export class AskServiceClient {
     request: Ask_AttachRequest,
     timeoutMs: number = DEFAULT_TIMEOUT_MS
   ): Promise<Ask_AttachResponse> {
+    const routeKey = (Ask_AttachRequest as any).routeKey;
+    if (!routeKey) {
+      throw new Error('Ask_AttachRequest has no routeKey associated');
+    }
     const payload = encodeAttachRequest(request);
     const response = await this.actorRef.call(
-      ATTACH_ROUTE_KEY,
+      routeKey,
       DEFAULT_PAYLOAD_TYPE,
       payload,
       timeoutMs
@@ -170,7 +154,8 @@ export class AskServiceClient {
     }
 
     try {
-      const targetId = await ctx.discover(ROUTES[0].targetType);
+      const targetType = { manufacturer: 'askaway1', name: 'AskService' };
+      const targetId = await ctx.discover(targetType);
       for (let i = 1; i <= 3; i += 1) {
         const chunk: DataStream = {
           streamId,

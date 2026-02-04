@@ -1117,7 +1117,6 @@ function renderClientTs(pkg, services, typeNameMap) {
     const reqType = entry.method.resolvedRequestType;
     if (reqType) {
       const typeName = typeNameMap.get(reqType.fullName);
-      const fieldNames = reqType.fieldsArray.map((field) => field.name);
       if (reqType.fieldsArray.length === 1) {
         const field = reqType.fieldsArray[0];
         const paramType = tsFieldType(field, typeNameMap);
@@ -1159,6 +1158,16 @@ function renderClientTs(pkg, services, typeNameMap) {
 
   for (const entry of routeKeys) {
     lines.push(`export const ${entry.constName} = '${entry.routeKey}';`);
+  }
+  if (routeKeys.length > 0) lines.push('');
+
+  for (const entry of routeKeys) {
+    const reqType = entry.method.resolvedRequestType;
+    if (reqType) {
+      const typeName = typeNameMap.get(reqType.fullName);
+      // Add routeKey to the type's companion object
+      lines.push(`((${typeName} as any).routeKey = ${entry.constName});`);
+    }
   }
   if (routeKeys.length > 0) lines.push('');
 
@@ -1378,6 +1387,10 @@ function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates,
   lines.push('): Promise<Buffer> {');
 
   for (const route of localRoutes) {
+    // Only generate local handler dispatch if the route is NOT a remote dependency
+    const isRemote = routeEntries.some(e => e.constName === route.constName);
+    if (isRemote) continue;
+
     lines.push(`  if (envelope.routeKey === ${route.constName}) {`);
     lines.push(`    const request = ${route.reqType}.decode(envelope.payload);`);
     lines.push(`    const response = await handler.${route.methodName}(request, ctx);`);

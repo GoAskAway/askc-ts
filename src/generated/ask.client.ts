@@ -6,6 +6,9 @@ import { Ask_AssistantReply, Ask_AttachRequest, Ask_AttachResponse, Ask_UsrPromp
 export const PROMPT_ROUTE_KEY = 'ask.AskService.Prompt';
 export const ATTACH_ROUTE_KEY = 'ask.AskService.Attach';
 
+((Ask_UsrPromptRequest as any).routeKey = PROMPT_ROUTE_KEY);
+((Ask_AttachRequest as any).routeKey = ATTACH_ROUTE_KEY);
+
 export function encodeUsrPromptRequest(message: Ask_UsrPromptRequest): Buffer {
   return Ask_UsrPromptRequest.encode(message);
 }
