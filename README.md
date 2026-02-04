@@ -11,7 +11,7 @@ Proto definitions are sourced from `askaway-proto` (git submodule).
 npm run codegen
 ```
 
-## Run demo
+## Run demo (recommended)
 
 ```bash
 npm run dev
