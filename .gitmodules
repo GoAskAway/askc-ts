@@ -1,0 +1,3 @@
+[submodule "askaway-proto"]
+	path = askaway-proto
+	url = https://github.com/GoAskAway/askaway-proto

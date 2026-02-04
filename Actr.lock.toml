@@ -1,0 +1,13 @@
+[metadata]
+version = 1
+generated_at = "2026-02-03T08:54:05.906685+00:00"
+
+[[dependency]]
+name = "ask-service"
+actr_type = "askaway+AskService"
+fingerprint = "service_semantic:4fce1bae95f2aefdd3773e853ce3c4e2505e5a7704faea3e7de6af286c13be58"
+cached_at = "2026-02-03T08:54:05.906682+00:00"
+
+[[dependency.files]]
+path = "ask.proto"
+fingerprint = ""

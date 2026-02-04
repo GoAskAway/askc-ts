@@ -1,0 +1,24 @@
+{
+  "name": "askc-ts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "codegen": "npm run codegen:proto",
+    "codegen:proto": "node scripts/generate-generated.cjs --config Actr.toml --proto-root askaway-proto --out src/generated --dist-import @actor-rtc/actr",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@actor-rtc/actr": "file:/Users/kaito/Project/actr-new/actr-ts"
+  },
+  "devDependencies": {
+    "@iarna/toml": "^2.2.5",
+    "@types/node": "^20.11.0",
+    "protobufjs": "^8.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}
