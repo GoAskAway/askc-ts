@@ -8,19 +8,3 @@ export const ATTACH_ROUTE_KEY = 'ask.AskService.Attach';
 
 ((Ask_UsrPromptRequest as any).routeKey = PROMPT_ROUTE_KEY);
 ((Ask_AttachRequest as any).routeKey = ATTACH_ROUTE_KEY);
-
-export function encodeUsrPromptRequest(message: Ask_UsrPromptRequest): Buffer {
-  return Ask_UsrPromptRequest.encode(message);
-}
-
-export function encodeAttachRequest(message: Ask_AttachRequest): Buffer {
-  return Ask_AttachRequest.encode(message);
-}
-
-export function decodeAssistantReply(buffer: Buffer): Ask_AssistantReply {
-  return Ask_AssistantReply.decode(buffer);
-}
-
-export function decodeAttachResponse(buffer: Buffer): Ask_AttachResponse {
-  return Ask_AttachResponse.decode(buffer);
-}

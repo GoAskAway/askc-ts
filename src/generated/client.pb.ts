@@ -1,8 +1,8 @@
 // DO NOT EDIT.
 // @ts-nocheck
-// Generated from askaway-proto/ask-service/ask.proto
+// Generated from protos/client.proto
 
-export enum Ask_AttachmentType {
+export enum Client_AttachmentType {
   ATTACHMENT_TYPE_UNKNOWN = 0,
   IMAGE = 1,
   DOCUMENT = 2,
@@ -11,18 +11,21 @@ export enum Ask_AttachmentType {
   OTHER = 99,
 }
 
-export interface Ask_UsrPromptRequest {
+export interface Client_PromptRequest {
   questionId: string;
   sessionId: string;
   text: string;
   voiceStreamId: string;
-  location: Ask_Location | undefined;
+  latitude: number;
+  longitude: number;
+  address: string;
+  placeName: string;
   attachmentIds: string[];
   textResponseStreamId: string;
   voiceResponseStreamId: string;
 }
 
-export interface Ask_AssistantReply {
+export interface Client_PromptResponse {
   questionId: string;
   sessionId: string;
   text: string;
@@ -30,28 +33,21 @@ export interface Ask_AssistantReply {
   errorMessage: string;
 }
 
-export interface Ask_AttachRequest {
+export interface Client_AttachRequest {
   id: string;
   filename: string;
-  type: Ask_AttachmentType;
+  type: Client_AttachmentType;
   data: Buffer;
 }
 
-export interface Ask_AttachResponse {
+export interface Client_AttachResponse {
   id: string;
   statusCode: number;
   errorMessage: string;
 }
 
-export interface Ask_Location {
-  latitude: number;
-  longitude: number;
-  address: string;
-  placeName: string;
-}
-
-export const Ask_UsrPromptRequest = {
-  encode(message: Ask_UsrPromptRequest): Buffer {
+export const Client_PromptRequest = {
+  encode(message: Client_PromptRequest): Buffer {
     const parts: Buffer[] = [];
 
     if (message.questionId !== undefined && message.questionId !== null) {
@@ -86,16 +82,36 @@ export const Ask_UsrPromptRequest = {
       parts.push(message_voiceStreamIdBytes);
     }
 
-    if (message.location !== undefined && message.location !== null) {
-      const tag = 42;
-      const message_locationBytes = Ask_Location.encode(message.location);
+    if (message.latitude !== undefined && message.latitude !== null) {
+      const tag = 41;
       parts.push(encodeVarint(tag));
-      parts.push(encodeVarint(message_locationBytes.length));
-      parts.push(message_locationBytes);
+      parts.push(encodeFloat64(message.latitude));
+    }
+
+    if (message.longitude !== undefined && message.longitude !== null) {
+      const tag = 49;
+      parts.push(encodeVarint(tag));
+      parts.push(encodeFloat64(message.longitude));
+    }
+
+    if (message.address !== undefined && message.address !== null) {
+      const tag = 58;
+      const message_addressBytes = Buffer.from(message.address, 'utf8');
+      parts.push(encodeVarint(tag));
+      parts.push(encodeVarint(message_addressBytes.length));
+      parts.push(message_addressBytes);
+    }
+
+    if (message.placeName !== undefined && message.placeName !== null) {
+      const tag = 66;
+      const message_placeNameBytes = Buffer.from(message.placeName, 'utf8');
+      parts.push(encodeVarint(tag));
+      parts.push(encodeVarint(message_placeNameBytes.length));
+      parts.push(message_placeNameBytes);
     }
 
     for (const value of message.attachmentIds) {
-      const tag = 50;
+      const tag = 74;
       const valueBytes = Buffer.from(value, 'utf8');
       parts.push(encodeVarint(tag));
       parts.push(encodeVarint(valueBytes.length));
@@ -103,7 +119,7 @@ export const Ask_UsrPromptRequest = {
     }
 
     if (message.textResponseStreamId !== undefined && message.textResponseStreamId !== null) {
-      const tag = 58;
+      const tag = 82;
       const message_textResponseStreamIdBytes = Buffer.from(message.textResponseStreamId, 'utf8');
       parts.push(encodeVarint(tag));
       parts.push(encodeVarint(message_textResponseStreamIdBytes.length));
@@ -111,7 +127,7 @@ export const Ask_UsrPromptRequest = {
     }
 
     if (message.voiceResponseStreamId !== undefined && message.voiceResponseStreamId !== null) {
-      const tag = 66;
+      const tag = 90;
       const message_voiceResponseStreamIdBytes = Buffer.from(message.voiceResponseStreamId, 'utf8');
       parts.push(encodeVarint(tag));
       parts.push(encodeVarint(message_voiceResponseStreamIdBytes.length));
@@ -121,13 +137,16 @@ export const Ask_UsrPromptRequest = {
     return Buffer.concat(parts);
   },
 
-  decode(buffer: Buffer): Ask_UsrPromptRequest {
+  decode(buffer: Buffer): Client_PromptRequest {
     let offset = 0;
     let questionId = '';
     let sessionId = '';
     let text = '';
     let voiceStreamId = '';
-    let location = undefined;
+    let latitude = 0;
+    let longitude = 0;
+    let address = '';
+    let placeName = '';
     let attachmentIds = [];
     let textResponseStreamId = '';
     let voiceResponseStreamId = '';
@@ -162,17 +181,36 @@ export const Ask_UsrPromptRequest = {
           case 4:
             voiceStreamId = value.toString('utf8');
             break;
-          case 5:
-            location = Ask_Location.decode(value);
-            break;
-          case 6:
-            attachmentIds.push(value.toString('utf8'));
-            break;
           case 7:
-            textResponseStreamId = value.toString('utf8');
+            address = value.toString('utf8');
             break;
           case 8:
+            placeName = value.toString('utf8');
+            break;
+          case 9:
+            attachmentIds.push(value.toString('utf8'));
+            break;
+          case 10:
+            textResponseStreamId = value.toString('utf8');
+            break;
+          case 11:
             voiceResponseStreamId = value.toString('utf8');
+            break;
+          default:
+            break;
+        }
+        continue;
+      }
+
+      if (wireType === 1) {
+        const value = buffer.subarray(offset, offset + 8);
+        offset += 8;
+        switch (fieldNumber) {
+          case 5:
+            latitude = readFloat64(value);
+            break;
+          case 6:
+            longitude = readFloat64(value);
             break;
           default:
             break;
@@ -188,7 +226,10 @@ export const Ask_UsrPromptRequest = {
       sessionId,
       text,
       voiceStreamId,
-      location,
+      latitude,
+      longitude,
+      address,
+      placeName,
       attachmentIds,
       textResponseStreamId,
       voiceResponseStreamId,
@@ -196,8 +237,8 @@ export const Ask_UsrPromptRequest = {
   },
 };
 
-export const Ask_AssistantReply = {
-  encode(message: Ask_AssistantReply): Buffer {
+export const Client_PromptResponse = {
+  encode(message: Client_PromptResponse): Buffer {
     const parts: Buffer[] = [];
 
     if (message.questionId !== undefined && message.questionId !== null) {
@@ -241,7 +282,7 @@ export const Ask_AssistantReply = {
     return Buffer.concat(parts);
   },
 
-  decode(buffer: Buffer): Ask_AssistantReply {
+  decode(buffer: Buffer): Client_PromptResponse {
     let offset = 0;
     let questionId = '';
     let sessionId = '';
@@ -312,8 +353,8 @@ export const Ask_AssistantReply = {
   },
 };
 
-export const Ask_AttachRequest = {
-  encode(message: Ask_AttachRequest): Buffer {
+export const Client_AttachRequest = {
+  encode(message: Client_AttachRequest): Buffer {
     const parts: Buffer[] = [];
 
     if (message.id !== undefined && message.id !== null) {
@@ -348,7 +389,7 @@ export const Ask_AttachRequest = {
     return Buffer.concat(parts);
   },
 
-  decode(buffer: Buffer): Ask_AttachRequest {
+  decode(buffer: Buffer): Client_AttachRequest {
     let offset = 0;
     let id = '';
     let filename = '';
@@ -414,8 +455,8 @@ export const Ask_AttachRequest = {
   },
 };
 
-export const Ask_AttachResponse = {
-  encode(message: Ask_AttachResponse): Buffer {
+export const Client_AttachResponse = {
+  encode(message: Client_AttachResponse): Buffer {
     const parts: Buffer[] = [];
 
     if (message.id !== undefined && message.id !== null) {
@@ -443,7 +484,7 @@ export const Ask_AttachResponse = {
     return Buffer.concat(parts);
   },
 
-  decode(buffer: Buffer): Ask_AttachResponse {
+  decode(buffer: Buffer): Client_AttachResponse {
     let offset = 0;
     let id = '';
     let statusCode = 0;
@@ -500,106 +541,6 @@ export const Ask_AttachResponse = {
       id,
       statusCode,
       errorMessage,
-    };
-  },
-};
-
-export const Ask_Location = {
-  encode(message: Ask_Location): Buffer {
-    const parts: Buffer[] = [];
-
-    if (message.latitude !== undefined && message.latitude !== null) {
-      const tag = 9;
-      parts.push(encodeVarint(tag));
-      parts.push(encodeFloat64(message.latitude));
-    }
-
-    if (message.longitude !== undefined && message.longitude !== null) {
-      const tag = 17;
-      parts.push(encodeVarint(tag));
-      parts.push(encodeFloat64(message.longitude));
-    }
-
-    if (message.address !== undefined && message.address !== null) {
-      const tag = 26;
-      const message_addressBytes = Buffer.from(message.address, 'utf8');
-      parts.push(encodeVarint(tag));
-      parts.push(encodeVarint(message_addressBytes.length));
-      parts.push(message_addressBytes);
-    }
-
-    if (message.placeName !== undefined && message.placeName !== null) {
-      const tag = 34;
-      const message_placeNameBytes = Buffer.from(message.placeName, 'utf8');
-      parts.push(encodeVarint(tag));
-      parts.push(encodeVarint(message_placeNameBytes.length));
-      parts.push(message_placeNameBytes);
-    }
-
-    return Buffer.concat(parts);
-  },
-
-  decode(buffer: Buffer): Ask_Location {
-    let offset = 0;
-    let latitude = 0;
-    let longitude = 0;
-    let address = '';
-    let placeName = '';
-
-    while (offset < buffer.length) {
-      const tagResult = decodeVarint(buffer, offset);
-      const tag = Number(tagResult.value);
-      offset += tagResult.length;
-
-      const fieldNumber = tag >> 3;
-      const wireType = tag & 0x07;
-
-      if (wireType === 2) {
-        const lengthResult = decodeVarint(buffer, offset);
-        const length = varintToNumber(lengthResult.value, 'length');
-        offset += lengthResult.length;
-
-        const end = offset + length;
-        const value = buffer.subarray(offset, end);
-        offset = end;
-
-        switch (fieldNumber) {
-          case 3:
-            address = value.toString('utf8');
-            break;
-          case 4:
-            placeName = value.toString('utf8');
-            break;
-          default:
-            break;
-        }
-        continue;
-      }
-
-      if (wireType === 1) {
-        const value = buffer.subarray(offset, offset + 8);
-        offset += 8;
-        switch (fieldNumber) {
-          case 1:
-            latitude = readFloat64(value);
-            break;
-          case 2:
-            longitude = readFloat64(value);
-            break;
-          default:
-            break;
-        }
-        continue;
-      }
-
-      throw new Error(`Unsupported wire type: ${wireType}`);
-    }
-
-    return {
-      latitude,
-      longitude,
-      address,
-      placeName,
     };
   },
 };

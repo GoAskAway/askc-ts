@@ -1,0 +1,54 @@
+syntax = "proto3";
+package client;
+
+// Local-only service that acts as an intermediary between the client
+// application and the remote AskService. The dispatch handler forwards
+// requests to the remote actor via discover + callRaw.
+service ClientService {
+  rpc Prompt(PromptRequest) returns (PromptResponse);
+  rpc Attach(AttachRequest) returns (AttachResponse);
+}
+
+message PromptRequest {
+  string question_id = 1;
+  string session_id = 2;
+  string text = 3;
+  string voice_stream_id = 4;
+  double latitude = 5;
+  double longitude = 6;
+  string address = 7;
+  string place_name = 8;
+  repeated string attachment_ids = 9;
+  string text_response_stream_id = 10;
+  string voice_response_stream_id = 11;
+}
+
+message PromptResponse {
+  string question_id = 1;
+  string session_id = 2;
+  string text = 3;
+  int32 status_code = 4;
+  string error_message = 5;
+}
+
+enum AttachmentType {
+  ATTACHMENT_TYPE_UNKNOWN = 0;
+  IMAGE = 1;
+  DOCUMENT = 2;
+  AUDIO = 3;
+  VIDEO = 4;
+  OTHER = 99;
+}
+
+message AttachRequest {
+  string id = 1;
+  string filename = 2;
+  AttachmentType type = 3;
+  bytes data = 4;
+}
+
+message AttachResponse {
+  string id = 1;
+  int32 status_code = 2;
+  string error_message = 3;
+}

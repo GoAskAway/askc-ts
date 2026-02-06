@@ -16,7 +16,7 @@ ask-service = { actr_type = "askaway1+AskService" }
 url = "wss://actrix1.develenv.com/signaling/ws"
 
 [system.deployment]
-realm_id = 2368266035
+realm_id = 2368_266_035
 
 [system.discovery]
 visible = true
@@ -30,4 +30,4 @@ turn_urls = ["turn:actrix1.develenv.com:3478"]
 
 [[acl.rules]]
 permission = "allow"
-types = ["askaway1+AskService"]
+types = ["askaway1+AskService", "acmeopenclaw+AskService"]

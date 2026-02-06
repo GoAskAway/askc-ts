@@ -7,6 +7,14 @@ Proto definitions are sourced from `askaway-proto` (git submodule).
 
 ## Codegen
 
+Run this first before development:
+
+```bash
+npm run codegen:proto
+```
+
+Then you can regenerate all generated files when needed:
+
 ```bash
 npm run codegen
 ```

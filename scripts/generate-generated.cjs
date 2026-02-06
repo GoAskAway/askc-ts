@@ -26,10 +26,18 @@ function parseArgs(argv) {
 
 function usage() {
   const message = [
-    'Usage: generate-generated --config <Actr.toml> [--out <generated-dir>] [--proto-root <protos/remote>] [--lock <Actr.lock.toml>] [--dist-import <path>] [--emit-js]',
+    'Usage: generate-generated --config <Actr.toml> --remote <dir> [--local <dir>] [--out <generated-dir>] [--dist-import <path>] [--emit-js]',
+    '',
+    'Options:',
+    '  --config       Path to Actr.toml configuration file',
+    '  --remote       Directory containing remote service .proto files',
+    '  --local        Directory containing local service .proto files (optional)',
+    '  --out          Output directory for generated files (default: generated/)',
+    '  --dist-import  Import path for actr runtime (default: relative to dist/)',
+    '  --emit-js      Also emit CommonJS .js files',
     '',
     'Example:',
-    '  node skills/asks-ts-codegen/scripts/generate-generated.cjs --config Actr.toml --proto-root askaway-proto --out src/generated',
+    '  node scripts/generate-generated.cjs --config Actr.toml --remote askaway-proto/ask-service --local askaway-proto/client-service --out src/generated',
   ].join('\n');
   console.error(message);
 }
@@ -76,7 +84,7 @@ function parseActrType(actrType) {
   return { manufacturer: match[0], name: match.slice(1).join('+') };
 }
 
-function loadDependencies(lockPath, configPath) {
+function loadDependencies(configPath) {
   const dependencies = [];
 
   if (fs.existsSync(configPath)) {
@@ -85,7 +93,6 @@ function loadDependencies(lockPath, configPath) {
       dependencies.push({
         name: config.package.actr_type.name,
         actrType: config.package.actr_type,
-        files: [],
       });
     }
 
@@ -94,19 +101,6 @@ function loadDependencies(lockPath, configPath) {
       dependencies.push({
         name,
         actrType: parseActrType(deps[name].actr_type),
-        files: [],
-      });
-    }
-  }
-
-  if (fs.existsSync(lockPath)) {
-    const lock = readToml(lockPath);
-    const deps = Array.isArray(lock.dependency) ? lock.dependency : [];
-    for (const dep of deps) {
-      dependencies.push({
-        name: dep.name,
-        actrType: parseActrType(dep.actr_type),
-        files: Array.isArray(dep.files) ? dep.files.map((file) => file.path) : [],
       });
     }
   }
@@ -114,16 +108,8 @@ function loadDependencies(lockPath, configPath) {
   return dependencies;
 }
 
-function collectProtoFiles(protoRoot, deps) {
+function collectProtoFiles(protoDir) {
   const files = [];
-  if (deps.some((dep) => dep.files.length > 0)) {
-    for (const dep of deps) {
-      for (const file of dep.files) {
-        files.push(path.join(protoRoot, file));
-      }
-    }
-    return files.filter((file) => fs.existsSync(file));
-  }
 
   function walk(dir) {
     if (!fs.existsSync(dir)) return;
@@ -138,7 +124,7 @@ function collectProtoFiles(protoRoot, deps) {
     }
   }
 
-  walk(protoRoot);
+  walk(protoDir);
   return files;
 }
 
@@ -1089,8 +1075,6 @@ function unique(arr) {
 function renderClientTs(pkg, services, typeNameMap) {
   const routeKeys = [];
   const importTypes = new Set();
-  const encodeFns = [];
-  const decodeFns = [];
 
   const methodNames = [];
   for (const service of services) {
@@ -1110,39 +1094,6 @@ function renderClientTs(pkg, services, typeNameMap) {
       const resType = method.resolvedResponseType;
       if (reqType) importTypes.add(typeNameMap.get(reqType.fullName));
       if (resType) importTypes.add(typeNameMap.get(resType.fullName));
-    }
-  }
-
-  for (const entry of routeKeys) {
-    const reqType = entry.method.resolvedRequestType;
-    if (reqType) {
-      const typeName = typeNameMap.get(reqType.fullName);
-      if (reqType.fieldsArray.length === 1) {
-        const field = reqType.fieldsArray[0];
-        const paramType = tsFieldType(field, typeNameMap);
-        encodeFns.push({
-          name: `encode${reqType.name}`,
-          paramType,
-          body: `return ${typeName}.encode({ ${field.name}: value });`,
-        });
-      } else {
-        encodeFns.push({
-          name: `encode${reqType.name}`,
-          paramType: typeName,
-          body: `return ${typeName}.encode(message);`,
-          paramName: 'message',
-        });
-      }
-    }
-
-    const resType = entry.method.resolvedResponseType;
-    if (resType) {
-      const typeName = typeNameMap.get(resType.fullName);
-      decodeFns.push({
-        name: `decode${resType.name}`,
-        returnType: typeName,
-        body: `return ${typeName}.decode(buffer);`,
-      });
     }
   }
 
@@ -1171,29 +1122,11 @@ function renderClientTs(pkg, services, typeNameMap) {
   }
   if (routeKeys.length > 0) lines.push('');
 
-  for (const fn of encodeFns) {
-    const paramName = fn.paramName || 'value';
-    lines.push(`export function ${fn.name}(${paramName}: ${fn.paramType}): Buffer {`);
-    lines.push(`  ${fn.body}`);
-    lines.push('}');
-    lines.push('');
-  }
-
-  for (const fn of decodeFns) {
-    lines.push(`export function ${fn.name}(buffer: Buffer): ${fn.returnType} {`);
-    lines.push(`  ${fn.body}`);
-    lines.push('}');
-    lines.push('');
-  }
-
   return lines.join('\n');
 }
 
 function renderClientJs(pkg, services, typeNameMap) {
   const routeKeys = [];
-  const importTypes = new Set();
-  const encodeFns = [];
-  const decodeFns = [];
 
   const methodNames = [];
   for (const service of services) {
@@ -1209,43 +1142,9 @@ function renderClientJs(pkg, services, typeNameMap) {
       const constBase = hasDuplicateMethod ? `${service.name}_${method.name}` : method.name;
       const constName = `${constBase.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}_ROUTE_KEY`;
       routeKeys.push({ constName, routeKey, method });
-      const reqType = method.resolvedRequestType;
-      const resType = method.resolvedResponseType;
-      if (reqType) importTypes.add(typeNameMap.get(reqType.fullName));
-      if (resType) importTypes.add(typeNameMap.get(resType.fullName));
     }
   }
 
-  for (const entry of routeKeys) {
-    const reqType = entry.method.resolvedRequestType;
-    if (reqType) {
-      const typeName = typeNameMap.get(reqType.fullName);
-      if (reqType.fieldsArray.length === 1) {
-        const field = reqType.fieldsArray[0];
-        encodeFns.push({
-          name: `encode${reqType.name}`,
-          body: `return ${typeName}.encode({ ${field.name}: value });`,
-        });
-      } else {
-        encodeFns.push({
-          name: `encode${reqType.name}`,
-          body: `return ${typeName}.encode(message);`,
-          paramName: 'message',
-        });
-      }
-    }
-
-    const resType = entry.method.resolvedResponseType;
-    if (resType) {
-      const typeName = typeNameMap.get(resType.fullName);
-      decodeFns.push({
-        name: `decode${resType.name}`,
-        body: `return ${typeName}.decode(buffer);`,
-      });
-    }
-  }
-
-  const imports = Array.from(importTypes).filter(Boolean).sort();
   const lines = [];
   lines.push('"use strict";');
   lines.push('// DO NOT EDIT.');
@@ -1254,40 +1153,16 @@ function renderClientJs(pkg, services, typeNameMap) {
 
   const exportNames = [];
   for (const entry of routeKeys) exportNames.push(entry.constName);
-  for (const fn of encodeFns) exportNames.push(fn.name);
-  for (const fn of decodeFns) exportNames.push(fn.name);
   if (exportNames.length > 0) {
     lines.push(`exports.${exportNames.join(' = exports.')} = void 0;`);
   }
   lines.push('');
-
-  if (imports.length > 0) {
-    lines.push(`const pb = require('./${pkg.replace(/\./g, '-')}.pb');`);
-    lines.push('');
-  }
 
   for (const entry of routeKeys) {
     lines.push(`const ${entry.constName} = '${entry.routeKey}';`);
     lines.push(`exports.${entry.constName} = ${entry.constName};`);
   }
   if (routeKeys.length > 0) lines.push('');
-
-  for (const fn of encodeFns) {
-    const paramName = fn.paramName || 'value';
-    lines.push(`function ${fn.name}(${paramName}) {`);
-    lines.push(`  ${fn.body.replace(/\b([A-Z][A-Za-z0-9_]*)\b/g, 'pb.$1')}`);
-    lines.push('}');
-    lines.push(`exports.${fn.name} = ${fn.name};`);
-    lines.push('');
-  }
-
-  for (const fn of decodeFns) {
-    lines.push(`function ${fn.name}(buffer) {`);
-    lines.push(`  ${fn.body.replace(/\b([A-Z][A-Za-z0-9_]*)\b/g, 'pb.$1')}`);
-    lines.push('}');
-    lines.push(`exports.${fn.name} = ${fn.name};`);
-    lines.push('');
-  }
 
   return lines.join('\n');
 }
@@ -1297,16 +1172,14 @@ function getRouteConstName(serviceName, methodName, hasDuplicateMethod) {
   return `${constBase.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}_ROUTE_KEY`;
 }
 
-function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates, distImport, routeEntries) {
+function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates, distImport) {
   const lines = [];
   lines.push('// DO NOT EDIT.');
   lines.push('// Generated by actr-ts-codegen.');
   lines.push('');
-  lines.push(`import { ContextBridge, RpcEnvelopeBridge } from '${distImport}';`);
-  lines.push(`import type { PayloadType } from '${distImport}';`);
+  lines.push(`import type { Context, RpcEnvelope } from '${distImport}';`);
 
   const localRoutes = [];
-  const routeImports = new Map();
   const typeImports = new Map();
 
   for (const entry of localServices) {
@@ -1314,6 +1187,7 @@ function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates,
     const hasDuplicateMethod = packageMethodDuplicates.get(entry.pkg) || false;
 
     for (const method of entry.service.methodsArray) {
+      const routeKey = `${entry.pkg}.${entry.service.name}.${method.name}`;
       const constName = getRouteConstName(entry.service.name, method.name, hasDuplicateMethod);
       const methodName = toLowerCamel(method.name);
       const reqType = typeNameMap.get(method.resolvedRequestType.fullName);
@@ -1321,29 +1195,16 @@ function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates,
 
       localRoutes.push({
         constName,
+        routeKey,
         methodName,
         reqType,
         resType,
       });
 
-      if (!routeImports.has(fileBase)) routeImports.set(fileBase, new Set());
-      routeImports.get(fileBase).add(constName);
-
       if (!typeImports.has(fileBase)) typeImports.set(fileBase, new Set());
       typeImports.get(fileBase).add(reqType);
       typeImports.get(fileBase).add(resType);
     }
-  }
-
-  for (const entry of routeEntries) {
-    if (!entry.fileBase) continue;
-    if (!routeImports.has(entry.fileBase)) routeImports.set(entry.fileBase, new Set());
-    routeImports.get(entry.fileBase).add(entry.constName);
-  }
-
-  for (const [fileBase, consts] of routeImports.entries()) {
-    const names = Array.from(consts).sort();
-    lines.push(`import { ${names.join(', ')} } from './${fileBase}.client.js';`);
   }
 
   for (const [fileBase, types] of typeImports.entries()) {
@@ -1354,27 +1215,22 @@ function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates,
 
   lines.push('');
 
+  for (const route of localRoutes) {
+    lines.push(`export const ${route.constName} = '${route.routeKey}';`);
+  }
+  if (localRoutes.length > 0) lines.push('');
+
+  for (const route of localRoutes) {
+    lines.push(`((${route.reqType} as any).routeKey = ${route.constName});`);
+  }
+  if (localRoutes.length > 0) lines.push('');
+
   if (localRoutes.length > 0) {
     lines.push('export interface LocalHandler {');
     for (const route of localRoutes) {
-      lines.push(`  ${route.methodName}(request: ${route.reqType}, ctx: ContextBridge): Promise<${route.resType}>;`);
+      lines.push(`  ${route.methodName}(request: ${route.reqType}, ctx: Context): Promise<${route.resType}>;`);
     }
     lines.push('}');
-    lines.push('');
-  }
-
-  if (routeEntries.length > 0) {
-    lines.push('const RPC_TIMEOUT_MS = 15000;');
-    lines.push('const RPC_PAYLOAD_TYPE: PayloadType = 0;');
-    lines.push('');
-    lines.push('const ROUTES = [');
-    for (const entry of routeEntries) {
-      lines.push('  {');
-      lines.push(`    routeKey: ${entry.constName},`);
-      lines.push(`    targetType: ${JSON.stringify(entry.targetType)},`);
-      lines.push('  },');
-    }
-    lines.push('];');
     lines.push('');
   }
 
@@ -1382,15 +1238,11 @@ function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates,
   if (localRoutes.length > 0) {
     lines.push('  handler: LocalHandler,');
   }
-  lines.push('  ctx: ContextBridge,');
-  lines.push('  envelope: RpcEnvelopeBridge');
+  lines.push('  ctx: Context,');
+  lines.push('  envelope: RpcEnvelope');
   lines.push('): Promise<Buffer> {');
 
   for (const route of localRoutes) {
-    // Only generate local handler dispatch if the route is NOT a remote dependency
-    const isRemote = routeEntries.some(e => e.constName === route.constName);
-    if (isRemote) continue;
-
     lines.push(`  if (envelope.routeKey === ${route.constName}) {`);
     lines.push(`    const request = ${route.reqType}.decode(envelope.payload);`);
     lines.push(`    const response = await handler.${route.methodName}(request, ctx);`);
@@ -1399,90 +1251,81 @@ function renderLocalActorTs(localServices, typeNameMap, packageMethodDuplicates,
     lines.push('');
   }
 
-  if (routeEntries.length > 0) {
-    lines.push('  const match = ROUTES.find((route) => route.routeKey === envelope.routeKey);');
-    lines.push('  if (!match) {');
-    lines.push('    throw new Error(`Unknown route: ${envelope.routeKey}`);');
-    lines.push('  }');
-    lines.push('');
-    lines.push('  const targetId = await ctx.discover(match.targetType);');
-    lines.push('  return await ctx.callRaw(');
-    lines.push('    targetId,');
-    lines.push('    envelope.routeKey,');
-    lines.push('    RPC_PAYLOAD_TYPE,');
-    lines.push('    envelope.payload,');
-    lines.push('    RPC_TIMEOUT_MS');
-    lines.push('  );');
-    lines.push('}');
-  } else {
-    lines.push('  throw new Error(`Unknown route: ${envelope.routeKey}`);');
-    lines.push('}');
-  }
+  lines.push('  throw new Error(`Unknown route: ${envelope.routeKey}`);');
+  lines.push('}');
 
   return lines.join('\n');
 }
 
-function renderLocalActorJs(routeEntries, distImport) {
+function renderLocalActorJs(localServices, typeNameMap, packageMethodDuplicates) {
   const lines = [];
   lines.push('"use strict";');
   lines.push('// DO NOT EDIT.');
   lines.push('// Generated by actr-ts-codegen.');
   lines.push('Object.defineProperty(exports, "__esModule", { value: true });');
-  lines.push('exports.dispatch = void 0;');
-  lines.push('');
-  lines.push(`const dist = require('${distImport}');`);
 
-  const uniqueImports = unique(routeEntries.map((entry) => entry.requireFrom));
-  for (const importLine of uniqueImports) {
-    lines.push(importLine);
+  const localRoutes = [];
+  const requireImports = new Map();
+
+  for (const entry of localServices) {
+    const fileBase = entry.pkg ? entry.pkg.replace(/\./g, '-') : 'root';
+    const hasDuplicateMethod = packageMethodDuplicates.get(entry.pkg) || false;
+
+    for (const method of entry.service.methodsArray) {
+      const routeKey = `${entry.pkg}.${entry.service.name}.${method.name}`;
+      const constName = getRouteConstName(entry.service.name, method.name, hasDuplicateMethod);
+      const methodName = toLowerCamel(method.name);
+      const reqType = typeNameMap.get(method.resolvedRequestType.fullName);
+      const resType = typeNameMap.get(method.resolvedResponseType.fullName);
+
+      localRoutes.push({ constName, routeKey, methodName, reqType, resType, fileBase });
+
+      if (!requireImports.has(fileBase)) requireImports.set(fileBase, new Set());
+      requireImports.get(fileBase).add(reqType);
+      requireImports.get(fileBase).add(resType);
+    }
   }
 
+  const exportNames = localRoutes.map((r) => r.constName);
+  exportNames.push('dispatch');
+  lines.push(`exports.${exportNames.join(' = exports.')} = void 0;`);
   lines.push('');
-  lines.push('const RPC_TIMEOUT_MS = 15000;');
-  lines.push('const RPC_PAYLOAD_TYPE = 0;');
-  lines.push('');
-  lines.push('const ROUTES = [');
-  for (const entry of routeEntries) {
-    lines.push('  {');
-    lines.push(`    routeKey: ${entry.constName},`);
-    lines.push(`    targetType: ${JSON.stringify(entry.targetType)},`);
-    lines.push('  },');
+
+  for (const [fileBase, types] of requireImports.entries()) {
+    const names = Array.from(types).filter(Boolean).sort();
+    if (names.length === 0) continue;
+    lines.push(`const pb_${fileBase.replace(/-/g, '_')} = require('./${fileBase}.pb');`);
   }
-  lines.push('];');
   lines.push('');
-  lines.push('async function dispatch(ctx, envelope) {');
-  lines.push('  const match = ROUTES.find((route) => route.routeKey === envelope.routeKey);');
-  lines.push('  if (!match) {');
-  lines.push('    throw new Error(`Unknown route: ${envelope.routeKey}`);');
-  lines.push('  }');
-  lines.push('');
-  lines.push('  const targetId = await ctx.discover(match.targetType);');
-  lines.push('  return await ctx.callRaw(');
-  lines.push('    targetId,');
-  lines.push('    envelope.routeKey,');
-  lines.push('    RPC_PAYLOAD_TYPE,');
-  lines.push('    envelope.payload,');
-  lines.push('    RPC_TIMEOUT_MS');
-  lines.push('  );');
+
+  for (const route of localRoutes) {
+    lines.push(`const ${route.constName} = '${route.routeKey}';`);
+    lines.push(`exports.${route.constName} = ${route.constName};`);
+  }
+  if (localRoutes.length > 0) lines.push('');
+
+  lines.push('async function dispatch(handler, ctx, envelope) {');
+
+  for (const route of localRoutes) {
+    const pbAlias = `pb_${route.fileBase.replace(/-/g, '_')}`;
+    lines.push(`  if (envelope.routeKey === ${route.constName}) {`);
+    lines.push(`    const request = ${pbAlias}.${route.reqType}.decode(envelope.payload);`);
+    lines.push(`    const response = await handler.${route.methodName}(request, ctx);`);
+    lines.push(`    return ${pbAlias}.${route.resType}.encode(response);`);
+    lines.push('  }');
+    lines.push('');
+  }
+
+  lines.push('  throw new Error(`Unknown route: ${envelope.routeKey}`);');
   lines.push('}');
   lines.push('exports.dispatch = dispatch;');
 
   return lines.join('\n');
 }
 
-function resolveTargetType(service, dependencies) {
-  const byServiceName = dependencies.find((dep) => dep.actrType && dep.actrType.name === service.name);
-  if (byServiceName) return byServiceName.actrType;
-
-  const uniqueTypes = dependencies.map((dep) => dep.actrType).filter(Boolean);
-  if (uniqueTypes.length === 1) return uniqueTypes[0];
-
-  return null;
-}
-
 async function main() {
   const args = parseArgs(process.argv);
-  if (!args.config) {
+  if (!args.config || !args.remote) {
     usage();
     process.exit(1);
   }
@@ -1490,27 +1333,44 @@ async function main() {
   const configPath = path.resolve(args.config);
   const configDir = path.dirname(configPath);
   const outDir = path.resolve(args.out || path.join(configDir, 'generated'));
-  const protoRoot = path.resolve(args['proto-root'] || args.protoRoot || path.join(configDir, 'protos', 'remote'));
-  const lockPath = path.resolve(args.lock || path.join(configDir, 'Actr.lock.toml'));
+  const remoteDir = path.resolve(args.remote);
+  const localDir = args.local ? path.resolve(args.local) : null;
   const repoRoot = findRepoRoot(configDir);
   const distImport = args['dist-import'] || args.distImport || toRelativeImport(outDir, path.join(repoRoot, 'dist', 'index.js'));
   const emitJs = Boolean(args['emit-js'] || args.emitJs);
 
-  const dependencies = loadDependencies(lockPath, configPath);
-  const protoFiles = collectProtoFiles(protoRoot, dependencies);
-  if (protoFiles.length === 0) {
-    throw new Error(`No .proto files found under ${protoRoot}`);
+  const dependencies = loadDependencies(configPath);
+
+  // Collect remote proto files (required)
+  const remoteProtoFiles = collectProtoFiles(remoteDir);
+  if (remoteProtoFiles.length === 0) {
+    throw new Error(`No .proto files found under ${remoteDir}`);
   }
 
-  const root = await protobuf.load(protoFiles);
+  // Collect local proto files (optional, may be empty)
+  const localProtoFiles = localDir ? collectProtoFiles(localDir) : [];
+
+  const allProtoFiles = [...remoteProtoFiles, ...localProtoFiles];
+
+  const root = await protobuf.load(allProtoFiles);
   root.resolveAll();
 
   const packages = collectPackages(root);
   const typeNameMap = buildTypeNameMap(packages);
 
+  // Determine which packages come from local protos
+  const localRoot = localProtoFiles.length > 0 ? await protobuf.load(localProtoFiles) : null;
+  if (localRoot) localRoot.resolveAll();
+  const localPackageNames = new Set();
+  if (localRoot) {
+    const localPackages = collectPackages(localRoot);
+    for (const pkg of localPackages.keys()) {
+      localPackageNames.add(pkg);
+    }
+  }
+
   ensureDir(outDir);
 
-  const routeEntries = [];
   const localServices = [];
   const packageMethodDuplicates = new Map();
 
@@ -1518,8 +1378,11 @@ async function main() {
     if (data.types.length === 0 && data.services.length === 0) continue;
 
     const fileBase = pkg ? pkg.replace(/\./g, '-') : 'root';
-    const protoLabel = protoFiles.map((file) => toPosix(path.relative(configDir, file))).join(', ');
+    // Use only the proto files that define this package (remote vs local), not all inputs
+    const packageProtoFiles = localPackageNames.has(pkg) ? localProtoFiles : remoteProtoFiles;
+    const protoLabel = packageProtoFiles.map((file) => toPosix(path.relative(configDir, file))).join(', ');
 
+    // Generate pb.ts for all packages (both remote and local)
     const pbTs = renderPbTs(pkg, data.enums, data.types, typeNameMap, protoLabel);
     const pbTsPath = path.join(outDir, `${fileBase}.pb.ts`);
     const pbJsPath = path.join(outDir, `${fileBase}.pb.js`);
@@ -1531,56 +1394,57 @@ async function main() {
       removeFileIfExists(pbJsPath);
     }
 
+    // Generate client.ts for packages with services (skip for local packages; their route keys live in local.actor)
     if (data.services.length > 0) {
       const methodNames = data.services.flatMap((svc) => svc.methodsArray.map((method) => method.name));
       const hasDuplicateMethod = methodNames.length !== new Set(methodNames).size;
       packageMethodDuplicates.set(pkg, hasDuplicateMethod);
 
-      const clientTs = renderClientTs(pkg, data.services, typeNameMap);
-      const clientTsPath = path.join(outDir, `${fileBase}.client.ts`);
-      const clientJsPath = path.join(outDir, `${fileBase}.client.js`);
-      fs.writeFileSync(clientTsPath, clientTs);
-      if (emitJs) {
-        const clientJs = renderClientJs(pkg, data.services, typeNameMap);
-        fs.writeFileSync(clientJsPath, clientJs);
+      if (!localPackageNames.has(pkg)) {
+        const clientTs = renderClientTs(pkg, data.services, typeNameMap);
+        const clientTsPath = path.join(outDir, `${fileBase}.client.ts`);
+        const clientJsPath = path.join(outDir, `${fileBase}.client.js`);
+        fs.writeFileSync(clientTsPath, clientTs);
+        if (emitJs) {
+          const clientJs = renderClientJs(pkg, data.services, typeNameMap);
+          fs.writeFileSync(clientJsPath, clientJs);
+        } else {
+          removeFileIfExists(clientJsPath);
+        }
       } else {
-        removeFileIfExists(clientJsPath);
+        removeFileIfExists(path.join(outDir, `${fileBase}.client.ts`));
+        removeFileIfExists(path.join(outDir, `${fileBase}.client.js`));
       }
 
-      for (const service of data.services) {
-        localServices.push({ pkg, service });
-        const targetType = resolveTargetType(service, dependencies);
-        if (!targetType) {
-          throw new Error(`No actr_type found for service ${service.name}`);
-        }
-
-        for (const method of service.methodsArray) {
-          const constName = getRouteConstName(service.name, method.name, hasDuplicateMethod);
-          const importFrom = `import { ${constName} } from './${fileBase}.client.js';`;
-          const requireFrom = `const ${constName} = require('./${fileBase}.client').${constName};`;
-          routeEntries.push({ constName, targetType, importFrom, requireFrom, fileBase });
+      if (localPackageNames.has(pkg)) {
+        for (const service of data.services) {
+          localServices.push({ pkg, service });
         }
       }
     }
   }
 
-  if (routeEntries.length > 0) {
+  // Generate local.actor.ts only if there are local services
+  if (localServices.length > 0) {
     const localActorTs = renderLocalActorTs(
       localServices,
       typeNameMap,
       packageMethodDuplicates,
-      distImport,
-      routeEntries
+      distImport
     );
     const localActorTsPath = path.join(outDir, 'local.actor.ts');
     const localActorJsPath = path.join(outDir, 'local.actor.js');
     fs.writeFileSync(localActorTsPath, localActorTs);
     if (emitJs) {
-      const localActorJs = renderLocalActorJs(routeEntries, distImport);
+      const localActorJs = renderLocalActorJs(localServices, typeNameMap, packageMethodDuplicates);
       fs.writeFileSync(localActorJsPath, localActorJs);
     } else {
       removeFileIfExists(localActorJsPath);
     }
+  } else {
+    // No local services — clean up stale local.actor files
+    removeFileIfExists(path.join(outDir, 'local.actor.ts'));
+    removeFileIfExists(path.join(outDir, 'local.actor.js'));
   }
 }
 
