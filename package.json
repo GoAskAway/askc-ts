@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@actor-rtc/actr": "https://github.com/actor-rtc/actr-ts/releases/download/v0.1.11/actor-rtc-actr-0.1.11.tgz"
+    "@actor-rtc/actr": "https://github.com/actor-rtc/actr-ts/releases/download/v0.1.12/actor-rtc-actr-0.1.12.tgz"
   },
   "devDependencies": {
     "@iarna/toml": "^3.0.0",
